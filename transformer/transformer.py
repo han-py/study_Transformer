@@ -97,3 +97,19 @@ class AddNorm(nn.Module):
 
     def forward(self, x, sublayer):
         return x + self.dropout(sublayer(self.norm(x)))
+
+
+class EncoderLayer(nn.Module):
+    def __init__(self, d_model, self_attn, feed_forward, dropout=0.1):
+        super(EncoderLayer, self).__init__()
+        self.self_attn = self_attn
+        self.feed_forward = feed_forward
+        self.sublayers = nn.ModuleList(
+            [AddNorm(d_model, dropout),
+             AddNorm(d_model, dropout)
+             ]
+        )
+
+    def forward(self, x, mask=None):
+        x = self.sublayers[0](x, lambda y: self.self_attn(x, x, x, mask))
+        return self.sublayers[1](x, self.feed_forward(x))
