@@ -45,3 +45,31 @@ def attention(query, key, value, mask=None, dropout=None):
     return attn @ value, attn
 
 
+class MultiHeadedAttention(nn.Module):
+    def __init__(self, h, d_model, dropout=0.1):
+        super(MultiHeadedAttention, self).__init__()
+        assert d_model % h == 0
+        self.d_k = d_model // h
+        self.h = h
+
+        self.linear_q = nn.Linear(d_model, d_model)
+        self.linear_k = nn.Linear(d_model, d_model)
+        self.linear_v = nn.Linear(d_model, d_model)
+        self.linear_out = nn.Linear(d_model, d_model)
+        self.dropout = nn.Dropout(dropout)
+
+    def forward(self, query, key, value, mask=None):
+        batch_size = query.size(0)
+
+        def transform(x, linear):
+            x = linear(x)
+            return x.view(batch_size, -1, self.h, self.d_k).transpose(1, 2)
+        query = transform(query, self.linear_q)
+        key = transform(key, self.linear_k)
+        value = transform(value, self.linear_v)
+
+        x, _ = attention(query, key, value, mask, self.dropout)
+
+        x = x.transpose(1, 2).contiguous().view(batch_size, -1, self.h * self.d_k)
+
+        return self.linear_out(x)
