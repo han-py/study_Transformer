@@ -116,9 +116,9 @@ class EncoderLayer(nn.Module):
         return self.sublayers[1](x, self.feed_forward(x))
 
 
-class Encoder(nn.Module):
+class DecoderLayer(nn.Module):
     def __init__(self, d_model, self_attn, cross_attn, feed_forward, dropout=0.1):
-        super(Encoder, self).__init__()
+        super(DecoderLayer, self).__init__()
         self.self_attn = self_attn
         self.cross_attn = cross_attn
         self.feed_forward = feed_forward
@@ -135,3 +135,46 @@ class Encoder(nn.Module):
         out2 = self.sublayers[1](out1, lambda y2: self.cross_attn(out1, memory, memory, src_mask))
         out3 = self.sublayers[2](out2, self.feed_forward(out2))
         return out3
+
+
+class Transformer(nn.Module):
+    def __init__(self, src_vocab, tag_vocab, d_model=512, N=6, h=8, d_ff=2048, dropout=0.1):
+        super(Transformer, self).__init__()
+
+        self.src_embed = nn.Sequential(
+            Embeddings(src_vocab, d_model),
+            PositionalEncoding(d_model)
+        )
+        self.tag_embed = nn.Sequential(
+            Embeddings(tag_vocab, d_model),
+            PositionalEncoding(d_model)
+        )
+
+        attn = lambda: MultiHeadedAttention(h, d_model, dropout)
+        ff = lambda: FeedForward(d_model, d_ff, dropout)
+
+        self.encoder = nn.ModuleList(
+            [EncoderLayer(d_model, attn(), ff(), dropout) for _ in range(N)]
+        )
+        self.decoder = nn.ModuleList(
+            [DecoderLayer(d_model, attn(), attn(), ff(), dropout) for _ in range(N)]
+        )
+
+        self.out = nn.Linear(d_model, tag_vocab)
+
+    def encode(self, src, src_mask):
+        x = self.src_embed(src)
+        for layer in self.encoder:
+            x = layer(x, src_mask)
+        return x
+
+    def decode(self, tag, memory, src_mask, tag_mask):
+        x = self.tag_embed(tag)
+        for layer in self.decoder:
+            x = layer(x, memory, src_mask, tag_mask)
+        return x
+
+    def forward(self, src, tag, src_mask=None, tag_mask=None):
+        memory = self.encode(src, src_mask)
+        out = self.decode(tag, memory, src_mask, tag_mask)
+        return self.out(out)
