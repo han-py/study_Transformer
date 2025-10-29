@@ -28,3 +28,20 @@ class PositionalEncoding(nn.Module):
     def forward(self, x):
         x = x + self.pe[:, :x.size(1), :]
         return x
+
+
+def attention(query, key, value, mask=None, dropout=None):
+    d_k = query.size(-1)
+    scores = query @ key.transpose(-2, -1) / math.sqrt(d_k)
+
+    if mask is not None:
+        scores = scores.masked_fill(mask == 0, float('-inf'))
+
+    attn = torch.softmax(scores, dim=-1)
+
+    if dropout is not None:
+        attn = dropout(attn)
+
+    return attn @ value, attn
+
+
